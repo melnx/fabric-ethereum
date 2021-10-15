@@ -1,0 +1,30 @@
+{
+  "name": "@fabric/ethereum",
+  "version": "0.1.0-dev",
+  "description": "Ethereum Oracle for Fabric.",
+  "main": "services/ethereum.js",
+  "scripts": {
+    "test": "mocha tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FabricLabs/fabric-service-ethereum.git"
+  },
+  "keywords": [
+    "fabric",
+    "bitcoin",
+    "ethereum",
+    "cryptocurrency",
+    "blockchain",
+    "currency"
+  ],
+  "author": "Fabric Labs",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/FabricLabs/fabric-service-ethereum/issues"
+  },
+  "homepage": "https://github.com/FabricLabs/fabric-service-ethereum#readme",
+  "dependencies": {
+    "@fabric/core": "martindale/fabric#message-relay"
+  }
+}
