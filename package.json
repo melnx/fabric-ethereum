@@ -25,6 +25,7 @@
   },
   "homepage": "https://github.com/FabricLabs/fabric-service-ethereum#readme",
   "dependencies": {
+    "@ethereumjs/vm": "^5.5.3",
     "@fabric/core": "martindale/fabric#message-relay"
   }
 }
