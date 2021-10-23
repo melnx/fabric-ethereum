@@ -103,7 +103,7 @@ class Ethereum extends Service {
     }).catch(err => console.log('Error    : ' + err));
   }
 
-  async _executeRPCRequest (name, params = [], callback = new Function()) {
+  async _executeRPCRequest (name, params = []) {
     const start = Date.now();
     const service = this;
     const actor = new Actor({
@@ -132,7 +132,7 @@ class Ethereum extends Service {
           }
         });
       } catch (exception) {
-        reject(new Error(`Request exception:`, exception));
+        reject(new Error(`Request exception: ${exception}`));
       }
     });
     return promise;
@@ -208,7 +208,7 @@ class Ethereum extends Service {
     if (service.settings.mode === 'rpc') {
       const providers = service.settings.servers.map(x => new URL(x));
       // TODO: loop through all providers
-      let provider = providers[0];
+      const provider = providers[0];
 
       if (provider.protocol === 'https:') secure = true;
       const config = {
@@ -233,7 +233,8 @@ class Ethereum extends Service {
 
     service.vm.on('step', service._handleVMStep.bind(service));
     service.status = 'started';
-    service.emit('warning', `Service started!`);
+
+    service.emit('log', 'Service started!');
     service.emit('ready', { id: service.id });
 
     this._checkAllTargetBalances();
