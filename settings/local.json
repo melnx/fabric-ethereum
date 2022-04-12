@@ -1,4 +1,8 @@
 {
+  "http": {
+    "port": 9999,
+    "secure": false
+  },
   "servers": [
     "https://SOME_RPC_ENDPOINT"
   ],

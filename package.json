@@ -4,6 +4,7 @@
   "description": "Ethereum Oracle for Fabric.",
   "main": "services/ethereum.js",
   "scripts": {
+    "start": "node scripts/node.js",
     "test": "mocha tests"
   },
   "repository": {
