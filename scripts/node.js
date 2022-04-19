@@ -1,13 +1,10 @@
 'use strict';
 
-const settings = require('../settings/local');
 const Ethereum = require('../services/ethereum');
-
-const HTTPServer = require('@fabric/http/types/server');
+const settings = require('../settings/local');
 
 async function main (input = {}) {
   const ethereum = new Ethereum(input);
-  const http = new HTTPServer(input.http);
 
   ethereum.on('log', function (msg) {
     console.log('[ETHEREUM]', 'Log:', msg);
@@ -18,12 +15,11 @@ async function main (input = {}) {
     console.log('[ETHEREUM]', 'Latest State:', beat['@data'].data.state);
   });
 
-  http.on('log', function (msg) {
-    console.log('[HTTP] [LOG]', msg);
-  });
+  await ethereum.start();
 
-  await http.start();
-  return ethereum.start();
+  return {
+    id: ethereum.id
+  };
 }
 
 main(settings).catch((exception) => {

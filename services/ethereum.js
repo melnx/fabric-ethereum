@@ -188,8 +188,8 @@ class Ethereum extends Service {
     // await this.vm.destroy();
 
     if (this.settings.mode === 'rpc') {
-      clearInterval(this.heartbeat);
-      delete this.heartbeat;
+      clearInterval(this._beat);
+      delete this._beat;
     }
 
     this.status = 'stopped';
@@ -228,7 +228,7 @@ class Ethereum extends Service {
       service.rpc = client;
 
       // Assign Heartbeat
-      service.heartbeat = setInterval(service.tick.bind(service), service.settings.interval);
+      service._beat = setInterval(service.tick.bind(service), service.settings.interval);
     }
 
     service.vm.on('step', service._handleVMStep.bind(service));
