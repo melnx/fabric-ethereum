@@ -27,8 +27,8 @@
   "homepage": "https://github.com/FabricLabs/fabric-service-ethereum#readme",
   "dependencies": {
     "@ethereumjs/vm": "^5.5.3",
-    "@fabric/core": "FabricLabs/fabric#swaps-develop",
-    "@fabric/http": "github:martindale/fabric-http#feature/react",
+    "@fabric/core": "github:FabricLabs/fabric#portal-staging",
+    "@fabric/http": "github:FabricLabs/fabric-http#portal-staging",
     "web3": "^1.7.3"
   },
   "devDependencies": {
