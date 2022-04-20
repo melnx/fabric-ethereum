@@ -5,7 +5,7 @@
     "secure": false
   },
   "servers": [
-    "https://SOME_RPC_ENDPOINT"
+    "http://localhost:8545"
   ],
   "interval": 12000
 }

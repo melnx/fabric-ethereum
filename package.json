@@ -28,7 +28,8 @@
   "dependencies": {
     "@ethereumjs/vm": "^5.5.3",
     "@fabric/core": "FabricLabs/fabric#swaps-develop",
-    "@fabric/http": "github:martindale/fabric-http#feature/react"
+    "@fabric/http": "github:martindale/fabric-http#feature/react",
+    "web3": "^1.7.3"
   },
   "devDependencies": {
     "@openzeppelin/contracts": "^4.5.0",

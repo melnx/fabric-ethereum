@@ -11,6 +11,7 @@ const Message = require('@fabric/core/types/message');
 // const Transition = require('@fabric/core/types/transition');
 
 // Ethereum
+const Web3 = require('web3');
 const VM = require('@ethereumjs/vm').default;
 // const Account = require('@ethereumjs/account').default;
 // const Blockchain = require('@ethereumjs/blockchain').default;
@@ -34,13 +35,14 @@ class Ethereum extends Service {
       hosts: [],
       stack: [],
       servers: ['http://127.0.0.1:8545'],
-      interval: 15000,
+      interval: 12500,
       targets: []
     }, this.settings, settings);
 
     // Internal Properties
     this.rpc = null;
     this.vm = new VM();
+    this.web3 = new Web3(this.settings.servers[0]);
 
     // Internal State
     this._state = {
@@ -90,6 +92,20 @@ class Ethereum extends Service {
   async _handleVMStep (step) {
     // let transition = Transition.between(this._state.stack, step.stack);
     this._state.stack = step.stack;
+  }
+
+  async deploy (input) {
+    const abi = Buffer.alloc(4096); // TODO: compile solidity
+    const address = await this.getReceiveAddress();
+    const contract = new this.web3.eth.Contract(abi, address, {
+      gasPrice: 10000
+    });
+
+    const deployed = await contract.deploy();
+
+    return {
+      deployed: deployed
+    };
   }
 
   async execute (program) {

@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const Node = require('@fabric/core/types/node');
+
 const Mint = require('../services/mint');
 const settings = require('../settings/local');
 
