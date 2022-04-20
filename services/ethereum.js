@@ -95,16 +95,21 @@ class Ethereum extends Service {
   }
 
   async deploy (input) {
-    const abi = Buffer.alloc(4096); // TODO: compile solidity
+    const abi = Buffer.alloc(4096); // TODO: compile solidity (input)
     const address = await this.getReceiveAddress();
     const contract = new this.web3.eth.Contract(abi, address, {
-      gasPrice: 10000
+      gasPrice: 1500000
     });
 
     const deployed = await contract.deploy();
+    const sent = await deployed.send({
+      gas: 1500000,
+      gasPrice: 30000000000000
+    });
 
     return {
-      deployed: deployed
+      deployed: deployed,
+      sent: sent
     };
   }
 
@@ -117,6 +122,10 @@ class Ethereum extends Service {
       console.log('Returned : ' + results.returnValue.toString('hex'));
       console.log('Gas used : ' + results.gasUsed.toString());
     }).catch(err => console.log('Error    : ' + err));
+  }
+
+  async getReceiveAddress () {
+
   }
 
   async _executeRPCRequest (name, params = []) {
