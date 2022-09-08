@@ -2,12 +2,12 @@ const express = require('express')
 const app = express()
 const port = 3333
 
-let db = require('./libs/db.js')
+let db = require(__dirname+'/../libs/db.js')
 
-app.use(express.static('public'))
+app.use(express.static(process.cwd() + '/assets'))
 
 app.get('/', (req, res) => {
-  res.sendFile('./public/atomic.html')
+  res.sendFile(process.cwd() + '/assets/index.html')
 })
 
 app.get('/createOrder', (req,res) => {

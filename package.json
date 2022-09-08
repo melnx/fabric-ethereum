@@ -25,9 +25,7 @@
   },
   "homepage": "https://github.com/FabricLabs/fabric-service-ethereum#readme",
   "dependencies": {
-    "@ethereumjs/vm": "^5.5.3",
-    "@fabric/core": "FabricLabs/fabric#message-relay",
-    "@fabric/http": "github:martindale/fabric-http#feature/react"
+    "express": "^4.18.1"
   },
   "devDependencies": {
     "@openzeppelin/contracts": "^4.5.0",

@@ -911,6 +911,8 @@ function getReserves(){
 	let token0 = getErcContract(from, erc20Handles[fromNet], fromNet);
 	let token1 = getErcContract(to, erc20Handles[toNet], toNet);
 
+	console.log("MY ACCOUNT", myaccount)
+
 	token0.balanceOf(myaccount, function(err,balance0){
 		token1.balanceOf(myaccount, function(err,balance1){
 
@@ -1347,9 +1349,19 @@ function openPage(label, url){
 	}, 1000);
 }
 
+var cachedOrders = "empty";
+
 function loadOrders(){
 	loadDoc("/getOrders", function(res){
 
+		if(cachedOrders === res){
+			return;
+		}else{
+			console.log("DETECTED CHANGE: RELOADING ORDERS");
+			//getReserves();
+		}
+
+		cachedOrders = res;
 		let orders = JSON.parse(res);
 
 		let ordersDiv = document.getElementById('orders');
@@ -1502,9 +1514,12 @@ function loadOrders(){
 					router2a.claimed(id, (err, claimed)=>{
 						console.log("MAKER CLAIMED?", claimed);
 						if(!claimed){
-							router2a.amounts(id, (err, amount)=>{
-								console.log("AMOUNT CLAIMABLE FOR MAKER", amount.toFixed());
-								if(amount.toFixed() == '0'){
+							//router2a.amounts(id, (err, amount)=>{
+							router2a.hashes(id, (err, hash)=>{
+								//console.log("AMOUNT CLAIMABLE FOR MAKER", amount.toFixed());
+								console.log("HASH CLAIMABLE FOR MAKER", hash);
+								//if(amount.toFixed() == '0'){
+								if(!hash){
 									//console.log("HIDING MAKERCLAIM BUTTON")
 									if(makerClaimButton) makerClaimButton.style.display = "none";
 								}
@@ -1514,9 +1529,12 @@ function loadOrders(){
 						}
 					})
 
-					router2a.amounts(id, (err, amount) => {
-						console.log("TAKER DEPOSITED?", amount.toFixed() != '0')
-						if(amount.toFixed() != '0' && takerDepositButton) takerDepositButton.style.opacity = '0.1';
+					//router2a.amounts(id, (err, amount) => {
+					router2a.hashes(id, (err, hash) => {
+						//console.log("TAKER DEPOSITED?", amount.toFixed() != '0')
+						console.log("TAKER DEPOSIT HASH?", hash)
+						//if(amount.toFixed() != '0' && takerDepositButton) takerDepositButton.style.opacity = '0.1';
+						if(hash && takerDepositButton) takerDepositButton.style.opacity = '0.1';
 					})
 
 
@@ -1778,6 +1796,7 @@ function init(){
 	//loadTokenBalance();
 
 	loadOrders();
+	setInterval(loadOrders, 5000);
 
 	loadAllowances();
 

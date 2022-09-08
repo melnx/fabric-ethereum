@@ -1,0 +1,143 @@
+.hr {
+  border:1px solid #333333;
+  clear:both;
+}
+.card{
+  background:#212429;
+  color: #C3C5CB;
+  opacity:0.9;
+  border-radius:20px;
+  padding:20px;
+  width:420px;
+  margin-left:auto;
+  margin-right:auto;
+  font-family: 'Inter var',sans-serif;
+}
+.multi-input{
+  border:2px solid #333333; border-radius:15px;
+  padding:10px;
+}
+.info-wrapper{
+  border:2px solid #333333; border-radius:10px;
+  padding:5px;
+}
+.sel{
+   width:100px; border:none;
+   background:transparent;
+   color:white;
+   float:right;
+   font-size:20px;
+   font-weight:500;
+}
+.inp{
+  border:none;
+  background:transparent;
+  width:238px;
+  color:white;
+  font-size:24px;
+  font-weight:500;
+}
+.inp:focus{
+  border:none;
+  outline:none;
+}
+.btn{
+  background:#2172E5;
+  color:white;
+  padding:16px 20px 14px 18px;
+  border-radius:18px;
+  text-align:center;
+  cursor:pointer;
+}
+.bod{
+    background-color:#2d2f36;
+      background-position: 0 -30vh;
+      background-image: radial-gradient(50% 50% at 50% 50%,rgba(33,114,229,0.1) 0%,rgba(33,36,41,0) 100%);
+
+}
+.label{
+  font-size:13px;
+  font-color:#C3C5CB;
+}
+.sep{
+  text-align:center;
+  padding:10px;
+}
+.max{
+  margin-top:3px;
+  color:#6da8ff;
+  border-radius:0.5rem;
+  border:1px solid #153d6f70;
+  margin-right:0.5rem;
+  font-size:0.875rem;
+  float:right;
+  cursor:pointer;
+  background-color:#153d6f70;
+}
+.ra{
+  text-align: right;
+}
+table{
+  color:white;
+  font-size:12px;
+}
+.balances{
+  font-family: "courier new";
+  font-size:8px;
+}
+.wallet-info{
+  position:fixed;
+  left:0;
+  bottom:0;
+  right:0;
+  color:white;
+  background:#212429;
+  padding:20px;
+  font-size:16px;
+  font-weight:500;
+  font-family:"Inter var", sans-serif;
+
+}
+#swap{
+  margin-top:60px
+}
+#bridge{
+  margin-top:100px;
+  margin-bottom:200px;
+}
+
+.loader {
+  border: 16px solid #f3f3f3; /* Light grey */
+  border-top: 16px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 10px;
+  height: 10px;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.small {
+  font-size:10px;
+  padding:4px 10px 4px 10px;
+}
+
+.xsmall {
+  font-size:6px;
+}
+
+.flash {
+  animation: flash .15s;
+}
+
+@keyframes flash {
+  50% {
+    background: orange;
+  }
+  100% {
+    background: transparent;
+  }
+}
