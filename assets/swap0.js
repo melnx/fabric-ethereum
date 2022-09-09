@@ -1563,8 +1563,6 @@ function hydrateOrders(orders, myaccount, cb){
 			//setTimeout(function(){
 			//},200)
 			if(makerDepositButton) makerDepositButton.style.opacity = '0.1';
-			//order.takerDeposit = true;
-			maybeHydated();
 		}else{
 			//console.log("HIDING MAKERCLAIM BUTTON")
 			if(makerClaimButton) makerClaimButton.style.display = "none";
@@ -1724,8 +1722,7 @@ function hydrateOrders(orders, myaccount, cb){
 							order.takerClaim = false;
 							order.filled = true;
 							maybeHydated();
-						}else{
-							//order.takerClaim = true;
+						}else{							
 							order.filled = false;
 							maybeHydated();
 						}
