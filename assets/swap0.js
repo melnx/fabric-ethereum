@@ -1358,6 +1358,7 @@ function hydrateOrders(orders, myaccount, cb){
 	let loadedCount = 0;
 	let orderKeys = Object.keys(orders);
 	let orderCount = orderKeys.length;
+	let sent = false;
 
 	orderKeys.forEach(function(id){
 
@@ -1369,11 +1370,15 @@ function hydrateOrders(orders, myaccount, cb){
 		let hydated = order;
 
 		let stepsLoaded = 0;
-		function maybeHydated(stepsRequired = 4){
+		function maybeHydated(stepsRequired = 6){
+			if(sent) return;
 			stepsLoaded++;
 			console.log("ORDERS", loadedCount, "ORDER", id, "STEPS", stepsLoaded);
-			if(stepsLoaded >=  stepsRequired) loadedCount++;
+			//if(stepsLoaded >=  stepsRequired) loadedCount++;
+			if(!order.taker || order.makerDeposit || order.takerDeposit || order.makerClaim || order.takerClaim || order.filled) loadedCount++;
+
 			if(loadedCount == orderCount){
+				sent = true;
 				if(cb) cb(null, orders);
 			}
 		}
@@ -1445,9 +1450,11 @@ function hydrateOrders(orders, myaccount, cb){
 								hideLoader();
 								if(err){ console.log("maker deposit error", err); return; }
 								console.log("maker deposit success", res);
-								getReserves();
-								loadOrders();
 
+								setTimeout(() => {
+									getReserves();
+									loadOrders();
+								},2000)
 
 								loadDoc(`/setHashOfSecret?id=${id}&hash=${hashOfSecret}`,(res) => {
 									console.log("HASH SET RESULT", res);
@@ -1465,7 +1472,6 @@ function hydrateOrders(orders, myaccount, cb){
 				order.takerFound = false;
 				maybeHydated(1);
 			}else{
-				order.makerDeposit = true;
 				order.takerFound = true;
 				maybeHydated();
 			}
@@ -1497,8 +1503,10 @@ function hydrateOrders(orders, myaccount, cb){
 							hideLoader();
 							if(err){ console.log("maker claim error", err); return; }
 							console.log("maker claim success", res);
-							getReserves();
-							loadOrders();
+							setTimeout(() => {
+								getReserves();
+								loadOrders();
+							},2000)
 						});
 					}
 				})
@@ -1555,6 +1563,9 @@ function hydrateOrders(orders, myaccount, cb){
 						order.takerDeposit = false;
 						order.takerDeposited = true;
 						maybeHydated();
+					}else{
+						order.takerDeposit = true;
+						maybeHydated();
 					}
 				})
 
@@ -1563,11 +1574,15 @@ function hydrateOrders(orders, myaccount, cb){
 			//setTimeout(function(){
 			//},200)
 			if(makerDepositButton) makerDepositButton.style.opacity = '0.1';
+			order.makerDeposited = true;
+			order.makerDeposit = false;
+			maybeHydated();
 		}else{
 			//console.log("HIDING MAKERCLAIM BUTTON")
 			if(makerClaimButton) makerClaimButton.style.display = "none";
 			order.makerClaim = false;
 			order.takerDeposit = false;
+			order.makerDeposit = true;
 			maybeHydated();
 		}
 
@@ -1608,8 +1623,11 @@ function hydrateOrders(orders, myaccount, cb){
 								hideLoader();
 								if(err){ console.log("taker deposit error", err); return; }
 								console.log("taker deposit success", res);
-								getReserves();
-								loadOrders();
+
+								setTimeout(() => {
+									getReserves();
+									loadOrders();
+								},2000)
 							});
 						}
 
@@ -1665,8 +1683,11 @@ function hydrateOrders(orders, myaccount, cb){
 									hideLoader();
 									if(err){ console.log("taker claim error", err); return; }
 									console.log("taker claim success", res);
-									getReserves();
-									loadOrders();
+
+									setTimeout(() => {
+										getReserves();
+										loadOrders();
+									},2000)
 								});
 							}
 						});
@@ -1688,6 +1709,7 @@ function hydrateOrders(orders, myaccount, cb){
 
 			console.log("LOOKING UP ID OF HASH OF SECRET", hashOfSecret, router1a)
 
+
 			router1a.idOfHashOfSecretNumber(hashOfSecret, (err, id)=>{
 				//console.log("LOOKED UP ID OF HASH OF SECRET", hashOfSecret, id.toFixed())
 				console.log("LOOKING UP SECRET FOR TAKER", net2, id.toFixed())
@@ -1696,6 +1718,8 @@ function hydrateOrders(orders, myaccount, cb){
 					console.log("LOOKED UP SECRET FOR TAKER", net2, secret.toFixed());
 					if(secret.toFixed() == '0'){
 						if(takerClaimButton) takerClaimButton.style.display = "none";
+						order.takerClaim = false;
+						maybeHydated();
 					}
 
 					router2a.claimed(id, (err, claimed)=>{
@@ -1720,12 +1744,23 @@ function hydrateOrders(orders, myaccount, cb){
 							}
 
 							order.takerClaim = false;
+							order.takerClaimed = true;
 							order.filled = true;
 							maybeHydated();
-						}else{							
+						}else{
+							if(secret.toFixed() != '0') order.takerClaim = true;
 							order.filled = false;
 							maybeHydated();
 						}
+
+
+						/*router1a.claimed(id, (err, claimed2)=>{
+							if(claimed2){
+								if(order.takerClaim !== false) order.takerClaim = true;
+								maybeHydated();
+							}
+						})*/
+
 					})
 				});
 			});
@@ -1757,7 +1792,6 @@ function hydrateOrders(orders, myaccount, cb){
 		//order.taker==web3.eth.accounts[0]
 		if(order.taker && !order.hashOfSecret){
 			appendFlag(row, 'wanted', '#aaffaa', null, {float:'right', opacity:'0.5'})
-			order.wanted = true;
 			order.takerFound = true;
 			maybeHydated(1);
 		}
@@ -1773,7 +1807,7 @@ function hydrateOrders(orders, myaccount, cb){
 	});
 
 	if(cb){
-		//cb(orders);
+		if(orderCount == 0) cb(orders);
 	}
 }
 
