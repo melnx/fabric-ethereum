@@ -2,7 +2,26 @@ const express = require('express')
 const app = express()
 const port = 3333
 
-let db = require(__dirname+'/../libs/db.js')
+let db = require(__dirname+'/../libs/db.js');
+let swapUtil = require(__dirname+'/../assets/swap0.js');
+
+/*XMLHttpRequest = null;
+window = {
+  addEventListener:()=>{},
+  removeEventListener:()=>{},
+  //ethereum: {},
+};
+global = {};*/
+
+//nodeExports = {};
+//require(__dirname + '/../libs/web3');
+//Web3 = nodeExports.Web3;
+//console.log("Web3", Web3);
+
+Web3 = require('web3');
+
+swapUtil.init();
+
 
 app.use(express.static(process.cwd() + '/assets'))
 
@@ -52,6 +71,13 @@ app.get('/setHashOfSecret', (req,res) => {
 
   res.send(value);
 })
+
+app.get('/getOrdersEx', (req,res) => {
+  let orders = db.load();
+  swapUtil.hydrateOrders(orders, null, (err, data) => {
+    res.send(err || data)
+  })
+});
 
 app.listen(port, async () => {
   console.log(`Example app listening at http://localhost:${port}`);

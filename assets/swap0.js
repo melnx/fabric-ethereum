@@ -1292,6 +1292,8 @@ function populateTokenMenu(){
 }
 
 function appendFlag(row, content, background, clicked, styles){
+	if(!row) return null;
+
 	let flag = document.createElement('button');
 	flag.innerHTML = content;
 	flag.style.background = background;
@@ -1351,6 +1353,433 @@ function openPage(label, url){
 
 var cachedOrders = "empty";
 
+function hydrateOrders(orders, myaccount, cb){
+
+	let loadedCount = 0;
+	let orderKeys = Object.keys(orders);
+	let orderCount = orderKeys.length;
+
+	orderKeys.forEach(function(id){
+
+		let order = orders[id];
+
+		if(!order.originAmount) return;
+
+		let row = isNode ? null : document.createElement('div');
+		let hydated = order;
+
+		let stepsLoaded = 0;
+		function maybeHydated(stepsRequired = 4){
+			stepsLoaded++;
+			console.log("ORDERS", loadedCount, "ORDER", id, "STEPS", stepsLoaded);
+			if(stepsLoaded >=  stepsRequired) loadedCount++;
+			if(loadedCount == orderCount){
+				if(cb) cb(null, orders);
+			}
+		}
+
+		let symbol1 = getSymbol(order.originToken, order.originNet);
+		let amount1 = new bn(order.originAmount).div('1e' + tokenDecimals[symbol1]).toFixed();
+		let symbol2 = getSymbol(order.targetToken, order.targetNet);
+		let amount2 = new bn(order.targetAmount).div('1e' + tokenDecimals[symbol2]).toFixed();
+
+		if(row) row.innerHTML = `
+			<table style="width:100%">
+				<tr>
+					<td>${amount1} ${symbol1} (${order.originNet})</td><td>➤</td><td style="text-align:right">${amount2} ${symbol2} (${order.targetNet})</td>
+				</tr>
+				<tr>
+					<td>${shorten(order.maker)}</td><td></td><td style="text-align:right">${shorten(order.taker)}</td>
+				</tr>
+			</table>
+		`
+		let makerDepositButton = null;
+		let takerDepositButton = null;
+		let makerClaimButton = null;
+		let takerClaimButton = null;
+
+		let hashOfSecret = order.hashOfSecret;
+
+		if(!myaccount || order.maker == myaccount){
+
+			makerDepositButton = appendFlag(row, 'maker deposit', "#aaaaff", function(){
+				let net = order.originNet;
+
+				let selectedNetwork = web3.version.network;
+				console.log("MAKER DEPOSIT", order.originToken, "ON NETWORK", net);
+
+				if(networkTypes[net] != selectedNetwork){
+					console.log("WRONG NETWORK: NEED", net, "GOT", getNetworkName(selectedNetwork));
+					alert("please select " + net + " in metamask")
+					return;
+				}else{
+					console.log(net, "SELECTED")
+				}
+
+				let myaccount = web3.eth.accounts[0];
+				let secret = Math.floor(Math.random() * 1000000);
+
+				router.hashOfSecretNumber(secret,function(err,hashOfSecret){
+			  	console.log("HASH OF SECRET", hashOfSecret, typeof hashOfSecret);
+
+					if(hashOfSecret==null){
+						console.log("invalid hash of secret: NULL")
+						return;
+					}
+					//let hashOfSecret = web3.sha3(web3.toHex(secret),{encoding:'hex'})
+
+					console.log("secret", secret, "hashOfSecret", hashOfSecret);
+
+					localStorage.setItem(hashOfSecret, secret.toString());
+
+					console.log("LOCALSTORAGE SET", localStorage.getItem(hashOfSecret))
+
+					router.deposit(order.originToken, order.originAmount, order.targetToken, order.targetAmount, hashOfSecret, order.taker, function(err, txHash){
+						openEtherscan(net, txHash);
+
+						console.log(err||txHash);
+
+						if(txHash){
+							showLoader();
+							waitForTxReceipt(txHash, function(err,res){
+								hideLoader();
+								if(err){ console.log("maker deposit error", err); return; }
+								console.log("maker deposit success", res);
+								getReserves();
+								loadOrders();
+
+
+								loadDoc(`/setHashOfSecret?id=${id}&hash=${hashOfSecret}`,(res) => {
+									console.log("HASH SET RESULT", res);
+								})
+							});
+						}
+					});
+
+				})
+			});
+
+			if(!order.taker){
+				if(makerDepositButton) makerDepositButton.style.display = "none";
+				order.makerDeposit = false;
+				order.takerFound = false;
+				maybeHydated(1);
+			}else{
+				order.makerDeposit = true;
+				order.takerFound = true;
+				maybeHydated();
+			}
+
+			makerClaimButton = appendFlag(row, "maker claim", "#5555FF", function(){
+				let secret = localStorage.getItem(hashOfSecret);
+
+				let net = order.targetNet;
+				let selectedNetwork = web3.version.network;
+				console.log("MAKER CLAIM", order.targetToken, "ON NETWORK", net);
+				if(networkTypes[net] != selectedNetwork){
+					console.log("WRONG NETWORK: NEED", net, "GOT", getNetworkName(selectedNetwork));
+					alert("please select " + net + " in metamask")
+					return;
+				}else{
+					console.log(net, "SELECTED")
+				}
+
+				console.log("SECRET", secret, "HASH OF SECRET", hashOfSecret);
+
+				router2.claim(secret, function(err,txHash){
+				  openEtherscan(net, txHash);
+
+					console.log("tx hash", txHash)
+
+					if(txHash){
+						showLoader();
+						waitForTxReceipt(txHash, function(err,res){
+							hideLoader();
+							if(err){ console.log("maker claim error", err); return; }
+							console.log("maker claim success", res);
+							getReserves();
+							loadOrders();
+						});
+					}
+				})
+			});
+		}
+
+		console.log("TAKER FOUND?", !!order.taker);
+		if(order.taker) console.log("MAKER DEPOSITED?", !!hashOfSecret);
+
+		//check status of maker deposit
+		if(hashOfSecret){
+
+			let net2 = order.targetNet;
+			let router2a = routerHandles[net2].at( net2 == 'ropsten' ? uniswapRouterAddress : uniswapRouterAddress2 );
+
+
+			router2a.idOfHashOfSecretNumber(hashOfSecret, (err, id)=>{
+				//console.log("ID OF HASH OF SECRET LOOKED UP FOR MAKER", hashOfSecret);
+
+				console.log("LOOKING UP CLAIMABLE FOR MAKER", net2);
+				router2a.claimed(id, (err, claimed)=>{
+					console.log("MAKER CLAIMED?", claimed);
+					if(!claimed){
+						//router2a.amounts(id, (err, amount)=>{
+						router2a.hashes(id, (err, hash)=>{
+							//console.log("AMOUNT CLAIMABLE FOR MAKER", amount.toFixed());
+							console.log("HASH CLAIMABLE FOR MAKER", hash);
+							//if(amount.toFixed() == '0'){
+							if(!hash){
+								//console.log("HIDING MAKERCLAIM BUTTON")
+								if(makerClaimButton) makerClaimButton.style.display = "none";
+								order.makerClaim = false;
+								maybeHydated();
+							}else{
+								order.makerClaim = true;
+								maybeHydated();
+							}
+						})
+					}else{
+						if(makerClaimButton) makerClaimButton.style.opacity = '0.1';
+						order.makerClaimed = true;
+						order.makerClaim = false;
+						maybeHydated();
+					}
+				})
+
+				//router2a.amounts(id, (err, amount) => {
+				router2a.hashes(id, (err, hash) => {
+					//console.log("TAKER DEPOSITED?", amount.toFixed() != '0')
+					console.log("TAKER DEPOSIT HASH?", hash)
+					//if(amount.toFixed() != '0' && takerDepositButton) takerDepositButton.style.opacity = '0.1';
+					if(hash){
+						if(takerDepositButton) takerDepositButton.style.opacity = '0.1';
+						order.takerDeposit = false;
+						order.takerDeposited = true;
+						maybeHydated();
+					}
+				})
+
+
+			});
+			//setTimeout(function(){
+			//},200)
+			if(makerDepositButton) makerDepositButton.style.opacity = '0.1';
+			//order.takerDeposit = true;
+			maybeHydated();
+		}else{
+			//console.log("HIDING MAKERCLAIM BUTTON")
+			if(makerClaimButton) makerClaimButton.style.display = "none";
+			order.makerClaim = false;
+			order.takerDeposit = false;
+			maybeHydated();
+		}
+
+		//add taker buttons
+		if(!myaccount || order.taker == myaccount){
+
+			if(order.hashOfSecret){
+
+				takerDepositButton = appendFlag(row, 'taker deposit', "#ffffaa", function(){
+					if(!order.hashOfSecret){
+						console.log("SECRET NOT SET YET");
+						return;
+					}
+
+					let net = order.targetNet;
+					let selectedNetwork = web3.version.network;
+					console.log("TAKER DEPOSIT", order.targetToken, "ON NETWORK", net);
+					if(networkTypes[net] != selectedNetwork){
+						console.log("WRONG NETWORK: NEED", net, "GOT", getNetworkName(selectedNetwork));
+						alert("please select " + net + " in metamask")
+						return;
+					}else{
+						console.log(net, "SELECTED")
+					}
+
+					console.log("HASH OF SECRET", order.hashOfSecret);
+
+					let myaccount = web3.eth.accounts[0];
+					router2.deposit( order.targetToken,  order.targetAmount, order.originToken, order.originAmount, order.hashOfSecret, order.maker, function(err, txHash){
+
+						openEtherscan(net, txHash);
+
+						console.log(err||txHash);
+
+						if(txHash){
+							showLoader();
+							waitForTxReceipt(txHash, function(err,res){
+								hideLoader();
+								if(err){ console.log("taker deposit error", err); return; }
+								console.log("taker deposit success", res);
+								getReserves();
+								loadOrders();
+							});
+						}
+
+					});
+				}, {float:'right'})
+
+				//makerDepositButton.style.display = 'none';
+
+			}
+
+			//let hashOfSecret = order.hashOfSecret;
+
+			console.log("hashOfSecret", hashOfSecret);
+
+			takerClaimButton = appendFlag(row, "taker claim", "#ffff55", function(){
+
+				let net = order.originNet;
+				let selectedNetwork = web3.version.network;
+				console.log("TAKER CLAIM", order.originToken, "ON NETWORK", net);
+				if(networkTypes[net] != selectedNetwork){
+					console.log("WRONG NETWORK: NEED", net, "GOT", getNetworkName(selectedNetwork));
+					alert("please select " + net + " in metamask")
+					return;
+				}else{
+					console.log(net, "SELECTED")
+				}
+
+
+				//let secret = localStorage.getItem(hashOfSecret);
+				console.log("HASH OF SECRET", hashOfSecret);
+
+				//console.log("LOOKING UP ID OF SECRET FOR TAKER ON", net);
+
+				router.idOfHashOfSecretNumber(hashOfSecret, (err, id)=>{
+
+					//console.log("LOOKED UP ID OF SECRET FOR TAKER OM", net, hashOfSecret, id.toFixed());
+
+					let net2 = order.targetNet;
+					let router2a = routerHandles[net2].at( net2 == 'ropsten' ? uniswapRouterAddress : uniswapRouterAddress2 );
+					console.log("LOOKING UP SECRET FOR TAKER ON", net2);
+
+					router2a.secrets(id, (err, secret)=>{
+						console.log("SECRET LOOKED UP FOR TAKER ON", net2, secret.toFixed());
+
+						router.claim(secret, function(err,txHash){
+							openEtherscan(net, txHash);
+
+							console.log("tx hash", txHash);
+
+							if(txHash){
+								showLoader();
+								waitForTxReceipt(txHash, function(err,res){
+									hideLoader();
+									if(err){ console.log("taker claim error", err); return; }
+									console.log("taker claim success", res);
+									getReserves();
+									loadOrders();
+								});
+							}
+						});
+					})
+				});
+			}, {float:'right'});
+		};
+
+		//hide taker claim button if secret is not revealed yet
+		if(hashOfSecret){
+
+
+			let net2 = order.originNet;
+			let router2a = routerHandles[net2].at( net2 == 'ropsten' ? uniswapRouterAddress : uniswapRouterAddress2 );
+
+			let net1 = order.targetNet;
+			let router1a = routerHandles[net1].at( net1 == 'ropsten' ? uniswapRouterAddress : uniswapRouterAddress2 );
+
+
+			console.log("LOOKING UP ID OF HASH OF SECRET", hashOfSecret, router1a)
+
+			router1a.idOfHashOfSecretNumber(hashOfSecret, (err, id)=>{
+				//console.log("LOOKED UP ID OF HASH OF SECRET", hashOfSecret, id.toFixed())
+				console.log("LOOKING UP SECRET FOR TAKER", net2, id.toFixed())
+
+				router1a.secrets(id, (err, secret)=>{
+					console.log("LOOKED UP SECRET FOR TAKER", net2, secret.toFixed());
+					if(secret.toFixed() == '0'){
+						if(takerClaimButton) takerClaimButton.style.display = "none";
+					}
+
+					router2a.claimed(id, (err, claimed)=>{
+						console.log("TAKER CLAIMED?", claimed);
+						if(claimed){
+							console.log("============= SUCCESS! ORDER FILLED =============")
+
+							if(takerClaimButton) takerClaimButton.style.opacity = '0.1';
+
+							if(row){
+								while(row.childElementCount > 1){
+									row.removeChild(row.lastChild);
+								}
+
+								//appendFlag(row, 'clear', null, {clear:'both', opacity:'0'})
+								appendFlag(row, 'order filled', '#aaaaaa', null, {float:'left', width:'100%', margin:'6px 0 6px 0'});
+
+
+								let hr = document.createElement('hr');
+								hr.className = 'hr';
+								row.appendChild(hr);
+							}
+
+							order.takerClaim = false;
+							order.filled = true;
+							maybeHydated();
+						}else{
+							//order.takerClaim = true;
+							order.filled = false;
+							maybeHydated();
+						}
+					})
+				});
+			});
+
+		}else{
+			//console.log("HIDING TAKERCLAIM BUTTON");
+			if(takerClaimButton) takerClaimButton.style.display = "none";
+			order.takerClaim = false;
+			maybeHydated();
+		}
+
+		if(!order.taker){
+			appendFlag(row, 'want', '#aaffaa', function(){
+				let myaccount = web3.eth.accounts[0];
+				showLoader();
+				loadDoc(`/wantOrder?id=${id}&address=${myaccount}`,(res) => {
+					console.log("WANT RESULT", res);
+					hideLoader();
+
+					let parsed = JSON.parse(res);
+					if(parsed.taker == myaccount) loadOrders();
+
+				})
+			}, {float:'right'});
+
+			//appendFlag(row, 'clear', null, {clear:'both', opacity:'0'})
+		}
+
+		//order.taker==web3.eth.accounts[0]
+		if(order.taker && !order.hashOfSecret){
+			appendFlag(row, 'wanted', '#aaffaa', null, {float:'right', opacity:'0.5'})
+			order.wanted = true;
+			order.takerFound = true;
+			maybeHydated(1);
+		}
+
+		if(!isNode){
+			let hr = document.createElement('hr');
+			hr.className = 'hr';
+			row.appendChild(hr)
+
+			ordersDiv.appendChild(row);
+		}
+
+	});
+
+	if(cb){
+		//cb(orders);
+	}
+}
+
 function loadOrders(){
 	loadDoc("/getOrders", function(res){
 
@@ -1362,370 +1791,15 @@ function loadOrders(){
 		}
 
 		cachedOrders = res;
+
 		let orders = JSON.parse(res);
 
-		let ordersDiv = document.getElementById('orders');
 		ordersDiv.innerHTML = "";
 
 		console.log("ORDERS", res);
 		let myaccount = web3.eth.accounts[0];
 
-		Object.keys(orders).forEach(function(id){
-		//for(var id in orders){
-			let order = orders[id];
-
-			if(!order.originAmount) return;
-
-			let row = document.createElement('div');
-
-
-
-			let symbol1 = getSymbol(order.originToken, order.originNet);
-			let amount1 = new bn(order.originAmount).div('1e' + tokenDecimals[symbol1]).toFixed();
-			let symbol2 = getSymbol(order.targetToken, order.targetNet);
-			let amount2 = new bn(order.targetAmount).div('1e' + tokenDecimals[symbol2]).toFixed();
-			row.innerHTML = `
-				<table style="width:100%">
-					<tr>
-						<td>${amount1} ${symbol1} (${order.originNet})</td><td>➤</td><td style="text-align:right">${amount2} ${symbol2} (${order.targetNet})</td>
-					</tr>
-					<tr>
-						<td>${shorten(order.maker)}</td><td></td><td style="text-align:right">${shorten(order.taker)}</td>
-					</tr>
-				</table>
-			`
-			let makerDepositButton = null;
-			let takerDepositButton = null;
-			let makerClaimButton = null;
-			let takerClaimButton = null;
-
-			let hashOfSecret = order.hashOfSecret;
-
-			if(order.maker == myaccount){
-
-				makerDepositButton = appendFlag(row, 'maker deposit', "#aaaaff", function(){
-					let net = order.originNet;
-
-					let selectedNetwork = web3.version.network;
-					console.log("MAKER DEPOSIT", order.originToken, "ON NETWORK", net);
-
-					if(networkTypes[net] != selectedNetwork){
-						console.log("WRONG NETWORK: NEED", net, "GOT", getNetworkName(selectedNetwork));
-						alert("please select " + net + " in metamask")
-						return;
-					}else{
-						console.log(net, "SELECTED")
-					}
-
-					let myaccount = web3.eth.accounts[0];
-					let secret = Math.floor(Math.random() * 1000000);
-
-					router.hashOfSecretNumber(secret,function(err,hashOfSecret){
-				  	console.log("HASH OF SECRET", hashOfSecret, typeof hashOfSecret);
-
-						if(hashOfSecret==null){
-							console.log("invalid hash of secret: NULL")
-							return;
-						}
-						//let hashOfSecret = web3.sha3(web3.toHex(secret),{encoding:'hex'})
-
-						console.log("secret", secret, "hashOfSecret", hashOfSecret);
-
-						localStorage.setItem(hashOfSecret, secret.toString());
-
-						console.log("LOCALSTORAGE SET", localStorage.getItem(hashOfSecret))
-
-						router.deposit(order.originToken, order.originAmount, order.targetToken, order.targetAmount, hashOfSecret, order.taker, function(err, txHash){
-							openEtherscan(net, txHash);
-
-							console.log(err||txHash);
-
-							if(txHash){
-								showLoader();
-								waitForTxReceipt(txHash, function(err,res){
-									hideLoader();
-									if(err){ console.log("maker deposit error", err); return; }
-									console.log("maker deposit success", res);
-									getReserves();
-									loadOrders();
-
-
-									loadDoc(`/setHashOfSecret?id=${id}&hash=${hashOfSecret}`,(res) => {
-										console.log("HASH SET RESULT", res);
-									})
-								});
-							}
-						});
-
-					})
-				});
-
-				if(!order.taker) makerDepositButton.style.display = "none";
-
-				makerClaimButton = appendFlag(row, "maker claim", "#5555FF", function(){
-					let secret = localStorage.getItem(hashOfSecret);
-
-					let net = order.targetNet;
-					let selectedNetwork = web3.version.network;
-					console.log("MAKER CLAIM", order.targetToken, "ON NETWORK", net);
-					if(networkTypes[net] != selectedNetwork){
-						console.log("WRONG NETWORK: NEED", net, "GOT", getNetworkName(selectedNetwork));
-						alert("please select " + net + " in metamask")
-						return;
-					}else{
-						console.log(net, "SELECTED")
-					}
-
-					console.log("SECRET", secret, "HASH OF SECRET", hashOfSecret);
-
-					router2.claim(secret, function(err,txHash){
-					  openEtherscan(net, txHash);
-
-						console.log("tx hash", txHash)
-
-						if(txHash){
-							showLoader();
-							waitForTxReceipt(txHash, function(err,res){
-								hideLoader();
-								if(err){ console.log("maker claim error", err); return; }
-								console.log("maker claim success", res);
-								getReserves();
-								loadOrders();
-							});
-						}
-					})
-				});
-			}
-
-			console.log("TAKER FOUND?", !!order.taker);
-			if(order.taker) console.log("MAKER DEPOSITED?", !!hashOfSecret);
-
-			//check status of maker deposit
-			if(hashOfSecret){
-
-				let net2 = order.targetNet;
-				let router2a = routerHandles[net2].at( net2 == 'ropsten' ? uniswapRouterAddress : uniswapRouterAddress2 );
-
-
-				router2a.idOfHashOfSecretNumber(hashOfSecret, (err, id)=>{
-					//console.log("ID OF HASH OF SECRET LOOKED UP FOR MAKER", hashOfSecret);
-
-					console.log("LOOKING UP CLAIMABLE FOR MAKER", net2);
-					router2a.claimed(id, (err, claimed)=>{
-						console.log("MAKER CLAIMED?", claimed);
-						if(!claimed){
-							//router2a.amounts(id, (err, amount)=>{
-							router2a.hashes(id, (err, hash)=>{
-								//console.log("AMOUNT CLAIMABLE FOR MAKER", amount.toFixed());
-								console.log("HASH CLAIMABLE FOR MAKER", hash);
-								//if(amount.toFixed() == '0'){
-								if(!hash){
-									//console.log("HIDING MAKERCLAIM BUTTON")
-									if(makerClaimButton) makerClaimButton.style.display = "none";
-								}
-							})
-						}else{
-							if(makerClaimButton) makerClaimButton.style.opacity = '0.1';
-						}
-					})
-
-					//router2a.amounts(id, (err, amount) => {
-					router2a.hashes(id, (err, hash) => {
-						//console.log("TAKER DEPOSITED?", amount.toFixed() != '0')
-						console.log("TAKER DEPOSIT HASH?", hash)
-						//if(amount.toFixed() != '0' && takerDepositButton) takerDepositButton.style.opacity = '0.1';
-						if(hash && takerDepositButton) takerDepositButton.style.opacity = '0.1';
-					})
-
-
-				});
-				//setTimeout(function(){
-				//},200)
-				if(makerDepositButton) makerDepositButton.style.opacity = '0.1';
-			}else{
-				//console.log("HIDING MAKERCLAIM BUTTON")
-				if(makerClaimButton) makerClaimButton.style.display = "none";
-			}
-
-			//add taker buttons
-			if(order.taker == myaccount){
-
-				if(order.hashOfSecret){
-
-					takerDepositButton = appendFlag(row, 'taker deposit', "#ffffaa", function(){
-						if(!order.hashOfSecret){
-							console.log("SECRET NOT SET YET");
-							return;
-						}
-
-						let net = order.targetNet;
-						let selectedNetwork = web3.version.network;
-						console.log("TAKER DEPOSIT", order.targetToken, "ON NETWORK", net);
-						if(networkTypes[net] != selectedNetwork){
-							console.log("WRONG NETWORK: NEED", net, "GOT", getNetworkName(selectedNetwork));
-							alert("please select " + net + " in metamask")
-							return;
-						}else{
-							console.log(net, "SELECTED")
-						}
-
-						console.log("HASH OF SECRET", order.hashOfSecret);
-
-						let myaccount = web3.eth.accounts[0];
-						router2.deposit( order.targetToken,  order.targetAmount, order.originToken, order.originAmount, order.hashOfSecret, order.maker, function(err, txHash){
-
-							openEtherscan(net, txHash);
-
-							console.log(err||txHash);
-
-							if(txHash){
-								showLoader();
-								waitForTxReceipt(txHash, function(err,res){
-									hideLoader();
-									if(err){ console.log("taker deposit error", err); return; }
-									console.log("taker deposit success", res);
-									getReserves();
-									loadOrders();
-								});
-							}
-
-						});
-					}, {float:'right'})
-
-					//makerDepositButton.style.display = 'none';
-
-				}
-
-				//let hashOfSecret = order.hashOfSecret;
-
-				console.log("hashOfSecret", hashOfSecret);
-
-				takerClaimButton = appendFlag(row, "taker claim", "#ffff55", function(){
-
-					let net = order.originNet;
-					let selectedNetwork = web3.version.network;
-					console.log("TAKER CLAIM", order.originToken, "ON NETWORK", net);
-					if(networkTypes[net] != selectedNetwork){
-						console.log("WRONG NETWORK: NEED", net, "GOT", getNetworkName(selectedNetwork));
-						alert("please select " + net + " in metamask")
-						return;
-					}else{
-						console.log(net, "SELECTED")
-					}
-
-
-					//let secret = localStorage.getItem(hashOfSecret);
-					console.log("HASH OF SECRET", hashOfSecret);
-
-					//console.log("LOOKING UP ID OF SECRET FOR TAKER ON", net);
-
-					router.idOfHashOfSecretNumber(hashOfSecret, (err, id)=>{
-
-						//console.log("LOOKED UP ID OF SECRET FOR TAKER OM", net, hashOfSecret, id.toFixed());
-
-						let net2 = order.targetNet;
-						let router2a = routerHandles[net2].at( net2 == 'ropsten' ? uniswapRouterAddress : uniswapRouterAddress2 );
-						console.log("LOOKING UP SECRET FOR TAKER ON", net2);
-
-						router2a.secrets(id, (err, secret)=>{
-							console.log("SECRET LOOKED UP FOR TAKER ON", net2, secret.toFixed());
-
-							router.claim(secret, function(err,txHash){
-								openEtherscan(net, txHash);
-
-								console.log("tx hash", txHash);
-
-								if(txHash){
-									showLoader();
-									waitForTxReceipt(txHash, function(err,res){
-										hideLoader();
-										if(err){ console.log("taker claim error", err); return; }
-										console.log("taker claim success", res);
-										getReserves();
-										loadOrders();
-									});
-								}
-							});
-						})
-					});
-				}, {float:'right'});
-			};
-
-			//hide taker claim button if secret is not revealed yet
-			if(hashOfSecret){
-				//console.log("LOOKING UP ID OF HASH OF SECRET", hashOfSecret)
-
-				let net2 = order.originNet;
-				let router2a = routerHandles[net2].at( net2 == 'ropsten' ? uniswapRouterAddress : uniswapRouterAddress2 );
-
-				let net1 = order.targetNet;
-				let router1a = routerHandles[net1].at( net1 == 'ropsten' ? uniswapRouterAddress : uniswapRouterAddress2 );
-
-				router1a.idOfHashOfSecretNumber(hashOfSecret, (err, id)=>{
-					//console.log("LOOKED UP ID OF HASH OF SECRET", hashOfSecret, id.toFixed())
-					console.log("LOOKING UP SECRET FOR TAKER", net2, id.toFixed())
-
-					router1a.secrets(id, (err, secret)=>{
-						console.log("LOOKED UP SECRET FOR TAKER", net2, secret.toFixed());
-						if(secret.toFixed() == '0'){
-							if(takerClaimButton) takerClaimButton.style.display = "none";
-						}
-
-						router2a.claimed(id, (err, claimed)=>{
-							console.log("TAKER CLAIMED?", claimed);
-							if(claimed){
-								console.log("============= SUCCESS! ORDER FILLED =============")
-
-								if(takerClaimButton) takerClaimButton.style.opacity = '0.1';
-
-								while(row.childElementCount > 1){
-									row.removeChild(row.lastChild);
-								}
-
-								//appendFlag(row, 'clear', null, {clear:'both', opacity:'0'})
-								appendFlag(row, 'order filled', '#aaaaaa', null, {float:'left', width:'100%', margin:'6px 0 6px 0'});
-
-								let hr = document.createElement('hr');
-								hr.className = 'hr';
-								row.appendChild(hr);
-
-							}
-						})
-					});
-				});
-
-			}else{
-				//console.log("HIDING TAKERCLAIM BUTTON");
-				if(takerClaimButton) takerClaimButton.style.display = "none";
-			}
-
-			if(!order.taker){
-				appendFlag(row, 'want', '#aaffaa', function(){
-					let myaccount = web3.eth.accounts[0];
-					showLoader();
-					loadDoc(`/wantOrder?id=${id}&address=${myaccount}`,(res) => {
-						console.log("WANT RESULT", res);
-						hideLoader();
-
-						let parsed = JSON.parse(res);
-						if(parsed.taker == myaccount) loadOrders();
-
-					})
-				}, {float:'right'});
-
-				//appendFlag(row, 'clear', null, {clear:'both', opacity:'0'})
-			}
-
-			if(order.taker && order.taker==web3.eth.accounts[0] && !order.hashOfSecret){
-				appendFlag(row, 'wanted', '#aaffaa', null, {float:'right', opacity:'0.5'})
-			}
-
-			let hr = document.createElement('hr');
-			hr.className = 'hr';
-			row.appendChild(hr)
-
-			ordersDiv.appendChild(row);
-		});
+		hydrateOrders(orders, myaccount);
 	})
 }
 
@@ -1738,14 +1812,16 @@ function loadAllowances(){
 	loadTokenAllowance("token_1", uniswapRouterAddress2);
 }
 
-loader = document.getElementById('loader');
+let isNode = typeof module != 'undefined';
 
 function showLoader(){
-	loader.style.display = 'block';
+	if(loader) loader.style.display = 'block';
 }
 function hideLoader(){
-	loader.style.display = 'none';
+	if(loader) loader.style.display = 'none';
 }
+
+
 
 function init(){
 	//bitcloutTokenAddress = BITCLOUT_TOKEN_ADDRESS;
@@ -1768,6 +1844,10 @@ function init(){
 
 		let rpc = new Web3(new Web3.providers.HttpProvider(rpcUrl));
 
+		if(!bn){
+			bn = rpc.BigNumber;
+		}
+
 		rpcs[net] = rpc;
 		erc20Handles[net] = rpc.eth.contract(erc20Abi);
 
@@ -1775,33 +1855,48 @@ function init(){
 	  //router = UniswapRouter.at(uniswapRouterAddress);
 	}
 
-  Erc20 = web3.eth.contract(erc20Abi);
-	//BitcloutErc20 = web3.eth.contract(bitcloutTokenAbi);
+	if(typeof web3 != 'undefined'){
+	  Erc20 = web3.eth.contract(erc20Abi);
+		//BitcloutErc20 = web3.eth.contract(bitcloutTokenAbi);
 
-  UniswapRouter = web3.eth.contract(uniswapRouterAbi);
+	  UniswapRouter = web3.eth.contract(uniswapRouterAbi);
 
-	//TODO: instantiate these for each order based on origin and target net
-  router = UniswapRouter.at(uniswapRouterAddress);
-	router2 = UniswapRouter.at(uniswapRouterAddress2);
+		//TODO: instantiate these for each order based on origin and target net
+	  router = UniswapRouter.at(uniswapRouterAddress);
+		router2 = UniswapRouter.at(uniswapRouterAddress2);
+		bn = web3.BigNumber;
+	}
 
-	bn = web3.BigNumber;
+	if(!isNode){
+		ordersDiv = document.getElementById('orders');
+		loader = document.getElementById('loader');
 
-	populateTokenMenu();
-	getReserves();
-	showconnect();
-	rendernetwork();
+		populateTokenMenu();
+		getReserves();
+		showconnect();
+		rendernetwork();
 
-	pollnetwork();
-	//loadBitcloutAddress();
-	//loadTokenBalance();
+		pollnetwork();
 
-	loadOrders();
-	setInterval(loadOrders, 5000);
+		//loadBitcloutAddress();
+		//loadTokenBalance();
 
-	loadAllowances();
+		loadOrders();
+		//setInterval(loadOrders, 5000);
+
+		loadAllowances();
+	}
 
 	//loadTokenAllowance("token_1", uniswapRouterAddress);
 	//loadTokenAllowance("token_0", uniswapRouterAddress2);
 
   //web3.eth.getAccounts(accounts => { console.log("ACCOUNT", accounts[0]) } )
+}
+
+if(isNode){
+	module.exports = {
+		init: init,
+		loadOrders: loadOrders,
+		hydrateOrders: hydrateOrders
+	}
 }
